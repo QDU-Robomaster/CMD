@@ -14,6 +14,7 @@ module_description: 控制命令模块
 
 #include "app_framework.hpp"
 #include "message.hpp"
+#include "cycle_value.hpp"
 
 /**
  * @class CMD
@@ -175,7 +176,7 @@ public:
         cmd->online_ = true;
       }
 
-      /* 根据控制���发布命令 */
+      /* 根据控制源发布命令 */
       if (cmd->ctrl_source_ == CTRL_SOURCE_RC ||
           (!cmd->data_[cmd->ctrl_source_].online)) {
         /* 使用遥控器控制源 */
