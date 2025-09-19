@@ -72,7 +72,7 @@ typedef struct {
 4. 云台和底盘控制数据分别通过gimbal_data_tp_和chassis_data_tp_发布
 
 ## 依赖模块
-无
+DR16
 
 ## 硬件依赖
 无（本模块仅处理逻辑，不直接操作硬件）
