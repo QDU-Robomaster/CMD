@@ -57,7 +57,7 @@ typedef struct {
 ```
 
 ## 主要方法
-- `RegisterController`: 注册控制器，接收来自指定源的数���
+- `RegisterController`: 注册控制器，接收来自指定源的数据
 - `RegisterEvent`: 注册事件回调
 - `SetCtrlSource`: 设置当前控制源
 - `GetCtrlSource`: 获取当前控制源
