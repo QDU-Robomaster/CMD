@@ -36,17 +36,17 @@ public:
    * @brief 控制模式枚举
    */
   typedef enum {
-    CMD_OP_CTRL,    /* 操作员控制模式 */
-    CMD_AUTO_CTRL,  /* 自动控制模式 */
+    CMD_OP_CTRL, /* 操作员控制模式 */
+    CMD_AUTO_CTRL, /* 自动控制模式 */
   } Mode;
 
   /**
    * @brief 底盘控制命令结构体
    */
   typedef struct {
-    float x;        /* X轴方向控制量 */
-    float y;        /* Y轴方向控制量 */
-    float z;        /* Z轴方向控制量（旋转） */
+    float x; /* X轴方向控制量 */
+    float y; /* Y轴方向控制量 */
+    float z; /* Z轴方向控制量（旋转） */
   } ChassisCMD;
 
   /**
@@ -62,24 +62,25 @@ public:
    * @brief 完整控制命令数据结构体
    */
   typedef struct {
-    GimbalCMD gimbal;      /* 云台控制命令 */
-    ChassisCMD chassis;    /* 底盘控制命令 */
-    bool online;           /* 在线状态 */
+    GimbalCMD gimbal; /* 云台控制命令 */
+    ChassisCMD chassis; /* 底盘控制命令 */
+    bool online; /* 在线状态 */
     ControlSource ctrl_source; /* 控制源 */
   } Data;
 
   /**
    * @brief 控制事件ID
    */
-  enum { CMD_EVENT_LOST_CTRL = 0x13212509 /* 丢失控制事件ID */
+  enum {
+    CMD_EVENT_LOST_CTRL = 0x13212509 /* 丢失控制事件ID */
   };
 
   /**
    * @brief 事件映射项结构体
    */
   typedef struct {
-    uint32_t source;       /* 源事件ID */
-    uint32_t target;       /* 目标事件ID */
+    uint32_t source; /* 源事件ID */
+    uint32_t target; /* 目标事件ID */
   } EventMapItem;
 
   /**
@@ -156,15 +157,13 @@ public:
   CMD(LibXR::HardwareContainer& hw, LibXR::ApplicationManager& app,
       Mode mode = CMD_OP_CTRL):
     mode_(mode) {
-
     /* 创建主题 */
     data_in_tp_ = LibXR::Topic::CreateTopic<Data>("cmd_data_in");
     gimbal_data_tp_ = LibXR::Topic::CreateTopic<GimbalCMD>("gimbal_cmd");
     chassis_data_tp_ = LibXR::Topic::CreateTopic<ChassisCMD>("chassis_cmd");
 
     /* 操作员控制模式回调函数 */
-    void (*op_ctrl_fn)(bool, CMD*, LibXR::RawData&) = [
-        ](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
+    auto op_ctrl_fn = [](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
       UNUSED(in_isr);
       UNUSED(raw_data);
 
@@ -191,8 +190,8 @@ public:
     };
 
     /* 自动控制模式回调函数 */
-    void (*auto_ctrl_fn)(bool, CMD*, LibXR::RawData&) = [
-        ](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
+    auto auto_ctrl_fn = [](bool in_isr, CMD* cmd,
+                           LibXR::RawData& raw_data) {
       UNUSED(in_isr);
       UNUSED(raw_data);
 
@@ -249,12 +248,12 @@ public:
   template <typename SourceDataType>
   void RegisterController(LibXR::Topic& source) {
     /* 定义链接函数 */
-    void (*link_fn)(bool, CMD*, LibXR::RawData&) = [
-        ](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
+    auto link_fn = [](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
       UNUSED(in_isr);
 
       /* 获取源数据 */
-      SourceDataType& source_data = *static_cast<SourceDataType*>(raw_data.addr_);
+      SourceDataType& source_data = *static_cast<SourceDataType*>(raw_data.
+        addr_);
 
       /* 处理CMD::Data类型数据 */
       if constexpr (std::is_same_v<SourceDataType, CMD::Data>) {
@@ -286,12 +285,12 @@ public:
   }
 
 private:
-  bool online_ = false;          /* 在线状态 */
-  ControlSource ctrl_source_;    /* 当前控制源 */
-  Mode mode_;                    /* 当前控制模式 */
-  LibXR::Event event_;           /* 事件处理器 */
+  bool online_ = false; /* 在线状态 */
+  ControlSource ctrl_source_; /* 当前控制源 */
+  Mode mode_; /* 当前控制模式 */
+  LibXR::Event event_; /* 事件处理器 */
   std::array<Data, CTRL_SOURCE_NUM> data_{}; /* 各控制源的数据 */
-  LibXR::Topic data_in_tp_;      /* 命令输入主题 */
+  LibXR::Topic data_in_tp_; /* 命令输入主题 */
   LibXR::Topic chassis_data_tp_; /* 底盘命令主题 */
-  LibXR::Topic gimbal_data_tp_;  /* 云台命令主题 */
+  LibXR::Topic gimbal_data_tp_; /* 云台命令主题 */
 };
