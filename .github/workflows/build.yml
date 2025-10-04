@@ -87,7 +87,7 @@ jobs:
 
       - name: Add this repo module
         run: |
-          xrobot_add_mod ${{ env.XR_MODULE_NAME }} && cat User/xrobot.yaml
+          xrobot_add_mod ${{ env.XR_MODULE_NAME }} --instance-id cmd && cat User/xrobot.yaml
 
       - name: Generate main again
         run: |
