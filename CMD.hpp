@@ -16,7 +16,6 @@ constructor_args:
  * @details 负责处理来自不同控制源的命令，并将其转发到相应的执行单元
  */
 
-#include <sys/_intsup.h>
 #include <vector>
 #include "app_framework.hpp"
 #include "event.hpp"
