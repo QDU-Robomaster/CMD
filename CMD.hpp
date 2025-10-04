@@ -3,6 +3,10 @@
 /* clang-format off */
 /* === MODULE MANIFEST V2 ===
 module_description: 控制命令模块
+constructor_args:
+  - mode: CMD::Mode::CMD_OP_CTRL
+  - chassis_cmd_topic_name: "chassis_cmd"
+  - gimbal_cmd_topic_name: "gimbal_cmd"
 === END MANIFEST === */
 /* clang-format on */
 
@@ -12,7 +16,10 @@ module_description: 控制命令模块
  * @details 负责处理来自不同控制源的命令，并将其转发到相应的执行单元
  */
 
+#include <sys/_intsup.h>
+#include <vector>
 #include "app_framework.hpp"
+#include "event.hpp"
 #include "message.hpp"
 #include "cycle_value.hpp"
 
@@ -153,14 +160,16 @@ public:
    * @param hw 硬件容器引用
    * @param app 应用管理器引用
    * @param mode 控制模式，默认为操作员控制模式
+   * @param chassis_cmd_topic_name 底盘命令主题名称
+   * @param gimbal_cmd_topic_name 云台命令主题名称
    */
   CMD(LibXR::HardwareContainer& hw, LibXR::ApplicationManager& app,
-      Mode mode = CMD_OP_CTRL):
-    mode_(mode) {
+      Mode mode , const char *chassis_cmd_topic_name , const char *gimbal_cmd_topic_name):
+    mode_(mode),
+    chassis_data_tp_(chassis_cmd_topic_name,sizeof(ChassisCMD)),
+    gimbal_data_tp_(gimbal_cmd_topic_name,sizeof(GimbalCMD)) {
     /* 创建主题 */
     data_in_tp_ = LibXR::Topic::CreateTopic<Data>("cmd_data_in");
-    gimbal_data_tp_ = LibXR::Topic::CreateTopic<GimbalCMD>("gimbal_cmd");
-    chassis_data_tp_ = LibXR::Topic::CreateTopic<ChassisCMD>("chassis_cmd");
 
     /* 操作员控制模式回调函数 */
     auto op_ctrl_fn = [](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
