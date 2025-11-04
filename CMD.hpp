@@ -7,6 +7,8 @@ constructor_args:
   - mode: CMD::Mode::CMD_OP_CTRL
   - chassis_cmd_topic_name: "chassis_cmd"
   - gimbal_cmd_topic_name: "gimbal_cmd"
+  - fire_topic_name: "fire_notify"
+  - host_euler_topic_name: "target_eulr"
 === END MANIFEST === */
 /* clang-format on */
 
@@ -65,6 +67,17 @@ class CMD : public LibXR::Application {
     LibXR::CycleValue<float> pit; /* 俯仰角（Pitch angle） */
     LibXR::CycleValue<float> rol; /* 翻滚角（Roll angle） */
   } GimbalCMD;
+
+  typedef struct {
+    float pitch;
+    float roll;
+    float yaw;
+  } HostEuler;
+
+  enum class FireNotify : uint8_t {
+    FIRE_STOP = 0,
+    FIRE_START,
+  };
 
   /**
    * @brief 完整控制命令数据结构体
@@ -162,14 +175,16 @@ class CMD : public LibXR::Application {
    * @param gimbal_cmd_topic_name 云台命令主题名称
    */
   CMD(LibXR::HardwareContainer& hw, LibXR::ApplicationManager& app, Mode mode,
-      const char* chassis_cmd_topic_name, const char* gimbal_cmd_topic_name)
+      const char* chassis_cmd_topic_name, const char* gimbal_cmd_topic_name,
+      const char* fire_topic_name, const char* host_eulr_topic_name)
       : mode_(mode),
+        data_in_tp_(LibXR::Topic::CreateTopic<Data>("cmd_data_in")),
         chassis_data_tp_(chassis_cmd_topic_name, sizeof(ChassisCMD)),
-        gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD)) {
+        gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD)),
+        fire_data_tp_(LibXR::Topic::CreateTopic<FireNotify>(fire_topic_name)),
+        host_euler_data_tp_(LibXR::Topic::CreateTopic<HostEuler>(host_eulr_topic_name)) {
     UNUSED(hw);
     UNUSED(app);
-    /* 创建主题 */
-    data_in_tp_ = LibXR::Topic::CreateTopic<Data>("cmd_data_in");
 
     /* 操作员控制模式回调函数 */
     auto op_ctrl_fn = [](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
@@ -195,8 +210,7 @@ class CMD : public LibXR::Application {
         source_to_use = ControlSource::CTRL_SOURCE_RC;
       }
 
-       auto& data_to_publish =
-          cmd->data_[static_cast<size_t>(source_to_use)];
+      auto& data_to_publish = cmd->data_[static_cast<size_t>(source_to_use)];
       cmd->gimbal_data_tp_.Publish(data_to_publish.gimbal);
       cmd->chassis_data_tp_.Publish(data_to_publish.chassis);
     };
@@ -312,8 +326,10 @@ class CMD : public LibXR::Application {
   Mode mode_;                 /* 当前控制模式 */
   LibXR::Event event_;        /* 事件处理器 */
   std::array<Data, static_cast<size_t>(ControlSource::CTRL_SOURCE_NUM)>
-      data_{};                   /* 各控制源的数据 */
-  LibXR::Topic data_in_tp_;      /* 命令输入主题 */
-  LibXR::Topic chassis_data_tp_; /* 底盘命令主题 */
-  LibXR::Topic gimbal_data_tp_;  /* 云台命令主题 */
+      data_{};                      /* 各控制源的数据 */
+  LibXR::Topic data_in_tp_;         /* 命令输入主题 */
+  LibXR::Topic chassis_data_tp_;    /* 底盘命令主题 */
+  LibXR::Topic gimbal_data_tp_;     /* 云台命令主题 */
+  LibXR::Topic fire_data_tp_;       /* 开火命令主题 */
+  LibXR::Topic host_euler_data_tp_; /* 上位机欧拉角主题 */
 };
