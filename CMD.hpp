@@ -8,7 +8,6 @@ constructor_args:
   - chassis_cmd_topic_name: "chassis_cmd"
   - gimbal_cmd_topic_name: "gimbal_cmd"
   - fire_topic_name: "fire_notify"
-  - host_euler_topic_name: "target_eulr"
 === END MANIFEST === */
 /* clang-format on */
 
