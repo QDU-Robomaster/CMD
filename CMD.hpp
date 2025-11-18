@@ -68,11 +68,12 @@ class CMD : public LibXR::Application {
     LibXR::CycleValue<float> rol; /* 翻滚角（Roll angle） */
   } GimbalCMD;
 
+  /**
+   * @brief 发射控制命令结构体
+   */
   typedef struct {
-    float pitch;
-    float roll;
-    float yaw;
-  } HostEuler;
+    bool isfire;
+  } LauncherCMD;
 
   enum class FireNotify : uint8_t {
     FIRE_STOP = 0,
@@ -176,13 +177,12 @@ class CMD : public LibXR::Application {
    */
   CMD(LibXR::HardwareContainer& hw, LibXR::ApplicationManager& app, Mode mode,
       const char* chassis_cmd_topic_name, const char* gimbal_cmd_topic_name,
-      const char* fire_topic_name, const char* host_eulr_topic_name)
+      const char* fire_topic_name)
       : mode_(mode),
         data_in_tp_(LibXR::Topic::CreateTopic<Data>("cmd_data_in")),
         chassis_data_tp_(chassis_cmd_topic_name, sizeof(ChassisCMD)),
         gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD)),
-        fire_data_tp_(LibXR::Topic::CreateTopic<FireNotify>(fire_topic_name)),
-        host_euler_data_tp_(LibXR::Topic::CreateTopic<HostEuler>(host_eulr_topic_name)) {
+        fire_data_tp_(LibXR::Topic::CreateTopic<FireNotify>(fire_topic_name)) {
     UNUSED(hw);
     UNUSED(app);
 
