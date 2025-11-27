@@ -7,6 +7,7 @@ constructor_args:
   - mode: CMD::Mode::CMD_OP_CTRL
   - chassis_cmd_topic_name: "chassis_cmd"
   - gimbal_cmd_topic_name: "gimbal_cmd"
+  - launcher_cmd_topic_name: "launcher_cmd"
 === END MANIFEST === */
 /* clang-format on */
 
@@ -80,7 +81,8 @@ class CMD : public LibXR::Application {
     GimbalCMD gimbal;          /* 云台控制命令 */
     ChassisCMD chassis;        /* 底盘控制命令 */
     LauncherCMD launcher;      /* 发射控制命令 */
-    bool online;               /* 在线状态 */
+    bool chassis_online;       /* 底盘在线状态 */
+    bool gimbal_online;        /* 云台在线状态 */
     ControlSource ctrl_source; /* 控制源 */
   } Data;
 
@@ -90,26 +92,6 @@ class CMD : public LibXR::Application {
   enum {
     CMD_EVENT_LOST_CTRL = 0x13212509 /* 丢失控制事件ID */
   };
-
-  /**
-   * @brief 事件映射项结构体
-   */
-  typedef struct {
-    uint32_t source; /* 源事件ID */
-    uint32_t target; /* 目标事件ID */
-  } EventMapItem;
-
-  /**
-   * @brief 设置控制源
-   * @param source 要设置的控制源
-   */
-  void SetCtrlSource(ControlSource source) { this->ctrl_source_ = source; }
-
-  /**
-   * @brief 获取当前控制源
-   * @return 当前控制源
-   */
-  ControlSource GetCtrlSource() { return this->ctrl_source_; }
 
   /**
    * @brief 获取当前控制模式
@@ -139,11 +121,13 @@ class CMD : public LibXR::Application {
    * @param gimbal_cmd_topic_name 云台命令主题名称
    */
   CMD(LibXR::HardwareContainer& hw, LibXR::ApplicationManager& app, Mode mode,
-      const char* chassis_cmd_topic_name, const char* gimbal_cmd_topic_name)
+      const char* chassis_cmd_topic_name, const char* gimbal_cmd_topic_name,
+      const char* launcher_cmd_topic_name)
       : mode_(mode),
         data_in_tp_(LibXR::Topic::CreateTopic<Data>("cmd_data_in")),
         chassis_data_tp_(chassis_cmd_topic_name, sizeof(ChassisCMD)),
-        gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD)) {
+        gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD)),
+        fire_data_tp_(launcher_cmd_topic_name, sizeof(LauncherCMD)) {
     UNUSED(hw);
     UNUSED(app);
     // 创建事件回调函数，用于处理控制模式切换事件
@@ -174,33 +158,25 @@ class CMD : public LibXR::Application {
 
         /* 检查在线状态 */
         if (!cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)]
-                 .online &&
+                 .chassis_online &&
             cmd->online_) {
           cmd->cmd_event_.Active(CMD_EVENT_LOST_CTRL);
           cmd->online_ = false;
         } else if (cmd->data_[static_cast<size_t>(
                                   ControlSource::CTRL_SOURCE_RC)]
-                       .online) {
+                       .chassis_online) {
           cmd->online_ = true;
         }
 
-        auto source_to_use = cmd->ctrl_source_;
-
-        // 如果当前控制源不是遥控器，但其数据离线了，则强制回退到使用遥控器
-        if (source_to_use != ControlSource::CTRL_SOURCE_RC &&
-            !cmd->data_[static_cast<size_t>(source_to_use)].online) {
-          source_to_use = ControlSource::CTRL_SOURCE_RC;
-        }
-
-        // 发布选中的控制源数据到对应的主题
-        auto& data_to_publish = cmd->data_[static_cast<size_t>(source_to_use)];
+        auto& data_to_publish = cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)];
         cmd->gimbal_data_tp_.Publish(data_to_publish.gimbal);
         cmd->chassis_data_tp_.Publish(data_to_publish.chassis);
+        cmd->fire_data_tp_.Publish(data_to_publish.launcher);
       };
+
       auto op_ctrl_callback =
           LibXR::Callback<LibXR::RawData&>::Create(op_ctrl_fn, this);
       this->data_in_tp_.RegisterCallback(op_ctrl_callback);
-      this->ctrl_source_ = ControlSource::CTRL_SOURCE_RC;
     }
 
     // 自动控制模式处理逻辑
@@ -209,48 +185,37 @@ class CMD : public LibXR::Application {
         UNUSED(in_isr);
         UNUSED(raw_data);
 
-        /* 创建新的控制数据 */
-        Data new_data;
-        new_data.online = true;
-        new_data.ctrl_source = ControlSource::CTRL_SOURCE_AI;
-
-        cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)] =
-            new_data;
-
         /* 检查在线状态 */
         if (!cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)]
-                 .online &&
+                 .chassis_online &&
             cmd->online_) {
           cmd->cmd_event_.Active(CMD_EVENT_LOST_CTRL);
           cmd->online_ = false;
         } else if (cmd->data_[static_cast<size_t>(
                                   ControlSource::CTRL_SOURCE_RC)]
-                       .online) {
+                       .chassis_online) {
           cmd->online_ = true;
         }
 
-        /* 根据控制源发布命令 */
-        if (cmd->ctrl_source_ == ControlSource::CTRL_SOURCE_RC ||
-            (!cmd->data_[static_cast<size_t>(cmd->ctrl_source_)].online)) {
-          // 使用遥控器控制源数据
-          cmd->gimbal_data_tp_.Publish(
-              cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)]
-                  .gimbal);
-          cmd->chassis_data_tp_.Publish(
-              cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)]
-                  .chassis);
-        } else if (cmd->ctrl_source_ == ControlSource::CTRL_SOURCE_AI &&
-                   cmd->data_[static_cast<size_t>(
-                                  ControlSource::CTRL_SOURCE_AI)]
-                       .online) {
-          // 使用AI控制源数据
-          cmd->gimbal_data_tp_.Publish(
-              cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)]
-                  .gimbal);
-          cmd->chassis_data_tp_.Publish(
-              cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)]
-                  .chassis);
-        }
+        /* 根据控制源发布命令：底盘/云台 AI 在线优先，离线用 RC */
+        const Data &rc_data =
+            cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)];
+        const Data &ai_data =
+            cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)];
+
+        ChassisCMD out_chassis =
+            ai_data.chassis_online ? ai_data.chassis : rc_data.chassis;
+
+        GimbalCMD out_gimbal =
+            ai_data.gimbal_online ? ai_data.gimbal : rc_data.gimbal;
+
+        LauncherCMD out_launcher;
+        out_launcher.isfire =
+            (ai_data.launcher.isfire && rc_data.launcher.isfire);
+
+        cmd->gimbal_data_tp_.Publish(out_gimbal);
+        cmd->chassis_data_tp_.Publish(out_chassis);
+        cmd->fire_data_tp_.Publish(out_launcher);
       };
 
       auto auto_ctrl_callback =
@@ -264,7 +229,9 @@ class CMD : public LibXR::Application {
    * @param event_id 事件ID
    * @details 处理来自事件系统的控制模式切换请求
    */
-  void EventHandler(uint32_t event_id) { SetCtrlMode(static_cast<Mode>(event_id)); }
+  void EventHandler(uint32_t event_id) {
+    SetCtrlMode(static_cast<Mode>(event_id));
+  }
 
   /**
    * @brief 注册控制器
@@ -290,7 +257,7 @@ class CMD : public LibXR::Application {
           cmd->data_[static_cast<size_t>(cmd_data.ctrl_source)] = cmd_data;
 
           /* 更新在线状态 */
-          if (cmd_data.online) {
+          if (cmd_data.chassis_online) {
             cmd->online_ = true;
           }
         }
@@ -312,9 +279,8 @@ class CMD : public LibXR::Application {
 
  private:
   bool online_ = false;       /* 在线状态 */
-  ControlSource ctrl_source_; /* 当前控制源 */
   Mode mode_;                 /* 当前控制模式 */
-  LibXR::Event cmd_event_;        /* 事件处理器 */
+  LibXR::Event cmd_event_;    /* 事件处理器 */
   std::array<Data, static_cast<size_t>(ControlSource::CTRL_SOURCE_NUM)>
       data_{};                      /* 各控制源的数据 */
   LibXR::Topic data_in_tp_;         /* 命令输入主题 */
