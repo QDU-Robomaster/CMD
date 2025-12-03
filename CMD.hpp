@@ -118,6 +118,22 @@ class CMD : public LibXR::Application {
   bool Online() { return this->online_; }
 
   /**
+   * @brief 直接写入遥控器控制数据
+   */
+  void FeedRC(const Data& rc_data) {
+    data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)] = rc_data;
+    ProcessAndPublish();
+  }
+
+  /**
+   * @brief 直接写入 AI 控制数据
+   */
+  void FeedAI(const Data& ai_data) {
+    data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)] = ai_data;
+    ProcessAndPublish();
+  }
+
+  /**
    * @brief CMD构造函数
    * @param hw 硬件容器引用
    * @param app 应用管理器引用
@@ -129,7 +145,6 @@ class CMD : public LibXR::Application {
       const char* chassis_cmd_topic_name, const char* gimbal_cmd_topic_name,
       const char* launcher_cmd_topic_name)
       : mode_(mode),
-        data_in_tp_(LibXR::Topic::CreateTopic<Data>("cmd_data_in")),
         chassis_data_tp_(chassis_cmd_topic_name, sizeof(ChassisCMD)),
         gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD)),
         fire_data_tp_(launcher_cmd_topic_name, sizeof(LauncherCMD)) {
@@ -154,77 +169,6 @@ class CMD : public LibXR::Application {
    */
   void SetCtrlMode(Mode mode) {
     this->mode_ = mode;
-    // 操作员控制模式处理逻辑
-    if (mode == Mode::CMD_OP_CTRL) {
-      // 操作员控制模式下的数据处理函数
-      auto op_ctrl_fn = [](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
-        UNUSED(raw_data);
-
-        /* 检查在线状态 */
-        if (!cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)]
-                 .chassis_online &&
-            cmd->online_) {
-          cmd->cmd_event_.Active(CMD_EVENT_LOST_CTRL);
-          cmd->online_ = false;
-        } else if (cmd->data_[static_cast<size_t>(
-                                  ControlSource::CTRL_SOURCE_RC)]
-                       .chassis_online) {
-          cmd->online_ = true;
-        }
-
-        auto& data_to_publish = cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)];
-        cmd->gimbal_data_tp_.PublishFromCallback(data_to_publish.gimbal,in_isr);
-        cmd->chassis_data_tp_.PublishFromCallback(data_to_publish.chassis,in_isr);
-        cmd->fire_data_tp_.PublishFromCallback(data_to_publish.launcher,in_isr);
-      };
-
-      auto op_ctrl_callback =
-          LibXR::Callback<LibXR::RawData&>::Create(op_ctrl_fn, this);
-      this->data_in_tp_.RegisterCallback(op_ctrl_callback);
-    }
-
-    // 自动控制模式处理逻辑
-    if (mode == Mode::CMD_AUTO_CTRL) {
-      auto auto_ctrl_fn = [](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
-        UNUSED(raw_data);
-
-        /* 检查在线状态 */
-        if (!cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)]
-                 .chassis_online &&
-            cmd->online_) {
-          cmd->cmd_event_.Active(CMD_EVENT_LOST_CTRL);
-          cmd->online_ = false;
-        } else if (cmd->data_[static_cast<size_t>(
-                                  ControlSource::CTRL_SOURCE_RC)]
-                       .chassis_online) {
-          cmd->online_ = true;
-        }
-
-        /* 根据控制源发布命令：底盘/云台 AI 在线优先，离线用 RC */
-        const Data &rc_data =
-            cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)];
-        const Data &ai_data =
-            cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)];
-
-        ChassisCMD out_chassis =
-            ai_data.chassis_online ? ai_data.chassis : rc_data.chassis;
-
-        GimbalCMD out_gimbal =
-            ai_data.gimbal_online ? ai_data.gimbal : rc_data.gimbal;
-
-        LauncherCMD out_launcher;
-        out_launcher.isfire =
-            (ai_data.launcher.isfire && rc_data.launcher.isfire);
-
-        cmd->gimbal_data_tp_.PublishFromCallback(out_gimbal,in_isr);
-        cmd->chassis_data_tp_.PublishFromCallback(out_chassis,in_isr);
-        cmd->fire_data_tp_.PublishFromCallback(out_launcher,in_isr);
-      };
-
-      auto auto_ctrl_callback =
-          LibXR::Callback<LibXR::RawData&>::Create(auto_ctrl_fn, this);
-      this->data_in_tp_.RegisterCallback(auto_ctrl_callback);
-    }
   }
 
   /**
@@ -244,34 +188,7 @@ class CMD : public LibXR::Application {
    */
   template <typename SourceDataType>
   void RegisterController(LibXR::Topic& source) {
-    /* 定义链接函数 */
-    auto link_fn = [](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
-
-      /* 获取源数据 */
-      SourceDataType& source_data =
-          *static_cast<SourceDataType*>(raw_data.addr_);
-
-      /* 处理CMD::Data类型数据 */
-      if constexpr (std::is_same_v<SourceDataType, CMD::Data>) {
-        Data& cmd_data = source_data;
-        if (cmd_data.ctrl_source < CMD::ControlSource::CTRL_SOURCE_NUM) {
-          /* 存储控制数据 */
-          cmd->data_[static_cast<size_t>(cmd_data.ctrl_source)] = cmd_data;
-
-          /* 更新在线状态 */
-          if (cmd_data.chassis_online) {
-            cmd->online_ = true;
-          }
-        }
-      }
-
-      /* 将数据转发到data_in_tp_主题 */
-      cmd->data_in_tp_.PublishFromCallback(source_data,in_isr);
-    };
-
-    /* 创建回调并注册 */
-    auto cb = LibXR::Callback<LibXR::RawData&>::Create(link_fn, this);
-    source.RegisterCallback(cb);
+    UNUSED(source);
   }
 
   /**
@@ -280,14 +197,50 @@ class CMD : public LibXR::Application {
   void OnMonitor() override {}
 
  private:
-  bool online_ = false;       /* 在线状态 */
-  Mode mode_;                 /* 当前控制模式 */
-  LibXR::Event cmd_event_;    /* 事件处理器 */
+  bool online_ = false;    /* 在线状态 */
+  Mode mode_;              /* 当前控制模式 */
+  LibXR::Event cmd_event_; /* 事件处理器 */
   std::array<Data, static_cast<size_t>(ControlSource::CTRL_SOURCE_NUM)>
       data_{};                      /* 各控制源的数据 */
-  LibXR::Topic data_in_tp_;         /* 命令输入主题 */
   LibXR::Topic chassis_data_tp_;    /* 底盘命令主题 */
   LibXR::Topic gimbal_data_tp_;     /* 云台命令主题 */
   LibXR::Topic fire_data_tp_;       /* 开火命令主题 */
   LibXR::Topic host_euler_data_tp_; /* 上位机欧拉角主题 */
+
+  /*--------------------------工具函数-------------------------------------------------*/
+  void ProcessAndPublish() {
+    const Data& rc_data =
+        data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)];
+    const Data& ai_data =
+        data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)];
+
+    if (!rc_data.chassis_online && online_) {
+      cmd_event_.Active(CMD_EVENT_LOST_CTRL);
+      online_ = false;
+    } else if (rc_data.chassis_online) {
+      online_ = true;
+    }
+
+    if (mode_ == Mode::CMD_OP_CTRL) {
+      Data out = rc_data;
+      gimbal_data_tp_.Publish(out.gimbal);
+      chassis_data_tp_.Publish(out.chassis);
+      fire_data_tp_.Publish(out.launcher);
+    } else {  // CMD_AUTO_CTRL
+      ChassisCMD out_chassis =
+          ai_data.chassis_online ? ai_data.chassis : rc_data.chassis;
+      GimbalCMD out_gimbal =
+          ai_data.gimbal_online ? ai_data.gimbal : rc_data.gimbal;
+      LauncherCMD out_launcher;
+      out_launcher.isfire =
+          (ai_data.launcher.isfire && rc_data.launcher.isfire);
+
+      ChassisCMD chassis = out_chassis;
+      GimbalCMD gimbal = out_gimbal;
+      LauncherCMD launcher = out_launcher;
+      gimbal_data_tp_.Publish(gimbal);
+      chassis_data_tp_.Publish(chassis);
+      fire_data_tp_.Publish(launcher);
+    }
+  }
 };
