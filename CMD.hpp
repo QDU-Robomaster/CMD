@@ -62,9 +62,9 @@ class CMD : public LibXR::Application {
    * @brief 云台控制命令结构体
    */
   typedef struct {
-    LibXR::CycleValue<float> yaw; /* 偏航角（Yaw angle） */
-    LibXR::CycleValue<float> pit; /* 俯仰角（Pitch angle） */
-    LibXR::CycleValue<float> rol; /* 翻滚角（Roll angle） */
+    float yaw; /* 偏航角（Yaw angle） */
+    float pit; /* 俯仰角（Pitch angle） */
+    float rol; /* 翻滚角（Roll angle） */
   } GimbalCMD;
 
   /**
@@ -98,6 +98,11 @@ class CMD : public LibXR::Application {
    * @return 当前控制模式
    */
   Mode GetCtrlMode() { return this->mode_; }
+
+  bool GetAIGimbalStatus() {
+    return this->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)]
+        .gimbal_online;
+  }
 
   /**
    * @brief 获取CMD模块的事件处理器
@@ -153,7 +158,6 @@ class CMD : public LibXR::Application {
     if (mode == Mode::CMD_OP_CTRL) {
       // 操作员控制模式下的数据处理函数
       auto op_ctrl_fn = [](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
-        UNUSED(in_isr);
         UNUSED(raw_data);
 
         /* 检查在线状态 */
@@ -169,9 +173,9 @@ class CMD : public LibXR::Application {
         }
 
         auto& data_to_publish = cmd->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)];
-        cmd->gimbal_data_tp_.Publish(data_to_publish.gimbal);
-        cmd->chassis_data_tp_.Publish(data_to_publish.chassis);
-        cmd->fire_data_tp_.Publish(data_to_publish.launcher);
+        cmd->gimbal_data_tp_.PublishFromCallback(data_to_publish.gimbal,in_isr);
+        cmd->chassis_data_tp_.PublishFromCallback(data_to_publish.chassis,in_isr);
+        cmd->fire_data_tp_.PublishFromCallback(data_to_publish.launcher,in_isr);
       };
 
       auto op_ctrl_callback =
@@ -182,7 +186,6 @@ class CMD : public LibXR::Application {
     // 自动控制模式处理逻辑
     if (mode == Mode::CMD_AUTO_CTRL) {
       auto auto_ctrl_fn = [](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
-        UNUSED(in_isr);
         UNUSED(raw_data);
 
         /* 检查在线状态 */
@@ -213,9 +216,9 @@ class CMD : public LibXR::Application {
         out_launcher.isfire =
             (ai_data.launcher.isfire && rc_data.launcher.isfire);
 
-        cmd->gimbal_data_tp_.Publish(out_gimbal);
-        cmd->chassis_data_tp_.Publish(out_chassis);
-        cmd->fire_data_tp_.Publish(out_launcher);
+        cmd->gimbal_data_tp_.PublishFromCallback(out_gimbal,in_isr);
+        cmd->chassis_data_tp_.PublishFromCallback(out_chassis,in_isr);
+        cmd->fire_data_tp_.PublishFromCallback(out_launcher,in_isr);
       };
 
       auto auto_ctrl_callback =
@@ -243,7 +246,6 @@ class CMD : public LibXR::Application {
   void RegisterController(LibXR::Topic& source) {
     /* 定义链接函数 */
     auto link_fn = [](bool in_isr, CMD* cmd, LibXR::RawData& raw_data) {
-      UNUSED(in_isr);
 
       /* 获取源数据 */
       SourceDataType& source_data =
@@ -264,7 +266,7 @@ class CMD : public LibXR::Application {
       }
 
       /* 将数据转发到data_in_tp_主题 */
-      cmd->data_in_tp_.Publish(source_data);
+      cmd->data_in_tp_.PublishFromCallback(source_data,in_isr);
     };
 
     /* 创建回调并注册 */
