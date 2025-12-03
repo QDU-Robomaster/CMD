@@ -145,9 +145,9 @@ class CMD : public LibXR::Application {
       const char* chassis_cmd_topic_name, const char* gimbal_cmd_topic_name,
       const char* launcher_cmd_topic_name)
       : mode_(mode),
-        chassis_data_tp_(chassis_cmd_topic_name, sizeof(ChassisCMD)),
-        gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD)),
-        fire_data_tp_(launcher_cmd_topic_name, sizeof(LauncherCMD)) {
+        chassis_data_tp_(chassis_cmd_topic_name, sizeof(ChassisCMD), nullptr, true),
+        gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD), nullptr, true),
+        fire_data_tp_(launcher_cmd_topic_name, sizeof(LauncherCMD), nullptr, true) {
     UNUSED(hw);
     UNUSED(app);
     // 创建事件回调函数，用于处理控制模式切换事件
