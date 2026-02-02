@@ -90,6 +90,7 @@ class CMD : public LibXR::Application {
    * @brief 控制事件ID
    */
   enum {
+    CMD_EVENT_START_CTRL = 0x13212508, /* 开始控制事件ID */
     CMD_EVENT_LOST_CTRL = 0x13212509 /* 丢失控制事件ID */
   };
 
@@ -217,7 +218,8 @@ class CMD : public LibXR::Application {
     if (!rc_data.chassis_online && online_) {
       cmd_event_.Active(CMD_EVENT_LOST_CTRL);
       online_ = false;
-    } else if (rc_data.chassis_online) {
+    } else if (rc_data.chassis_online && !online_) {
+      cmd_event_.Active(CMD_EVENT_START_CTRL);
       online_ = true;
     }
 
