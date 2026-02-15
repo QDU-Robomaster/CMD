@@ -1,78 +1,77 @@
-# CMD 控制命令模块
+# CMD
 
-## 模块简介
-CMD(Control Command)模块负责处理来自不同控制源的命令，并将其转发到相应的执行单元。它是机器人控制系统的核心组件，连接输入设备(如遥控器、键盘鼠标)与执行单元(如底盘、云台)。
+用于统一汇总控制输入并发布控制命令的中枢模块。
 
-## 功能特性
-- 支持多种控制源(遥控器、AI)的命令处理
-- 提供控制模式切换(操作员控制、自动控制)
-- 实现云台和底盘的分离控制
-- 在线状态监测与丢失控制检测
-- 事件映射与回调注册机制
+CMD 把不同来源（例如遥控、上位机）统一整理为三路命令：
 
-## 数据结构
-### 控制源
-```cpp
-typedef enum {
-  CTRL_SOURCE_RC, /* 遥控器控制源 */
-  CTRL_SOURCE_AI, /* AI控制源 */
-  CTRL_SOURCE_NUM /* 控制源数量 */
-} ControlSource;
+1. 底盘命令
+2. 云台命令
+3. 发射命令
+
+## 解决什么问题
+
+CMD 主要解决三件事：
+
+1. 统一控制源输入接口（`FeedRC` / `FeedAI`）。
+2. 统一控制模式切换（操作手/自动等）。
+3. 统一命令发布出口（下游模块只订阅 Topic，不关心输入来源）。
+
+## 核心流程
+
+CMD 的典型流程是：
+
+1. 输入模块调用 `FeedRC(...)` 或 `FeedAI(...)`。
+2. CMD 内部执行 `ProcessAndPublish()`。
+3. 发布 `chassis_cmd`、`gimbal_cmd`、`launcher_cmd`。
+4. 底盘/云台/发射模块各自订阅并执行。
+
+关键函数：
+
+1. `FeedRC(const Data&)`：喂入遥控控制数据。
+2. `FeedAI(const Data&)`：喂入上位机/自动控制数据。
+3. `SetCtrlMode(Mode)`：切换控制模式。
+4. `EventHandler(uint32_t)`：响应外部事件切换模式。
+5. `ProcessAndPublish()`：统一整理并发布命令。
+6. `GetEvent()`：提供事件绑定入口给 EventBinder 等模块使用。
+
+## 最小接入示例
+
+1. 添加模块：
+
+```bash
+xrobot_add_mod CMD --instance-id cmd
+xrobot_gen_main
 ```
 
-### 控制模式
-```cpp
-typedef enum {
-  CMD_OP_CTRL,    /* 操作员控制模式 */
-  CMD_AUTO_CTRL,  /* 自动控制模式 */
-} Mode;
+2. 典型配置（来自模块 manifest）：
+
+```yaml
+module: CMD
+entry_header: Modules/CMD/CMD.hpp
+constructor_args:
+  - mode: CMD::Mode::CMD_OP_CTRL
+  - chassis_cmd_topic_name: "chassis_cmd"
+  - gimbal_cmd_topic_name: "gimbal_cmd"
+  - launcher_cmd_topic_name: "launcher_cmd"
+template_args: []
 ```
 
-### 底盘控制命令
-```cpp
-typedef struct {
-  float x;        /* X轴方向控制量 */
-  float y;        /* Y轴方向控制量 */
-  float z;        /* Z轴方向控制量(旋转) */
-} ChassisCMD;
-```
+3. 下游模块只需订阅对应命令 Topic。
 
-### 云台控制命令
-```cpp
-typedef struct {
-  LibXR::CycleValue<float> yaw; /* 偏航角(Yaw angle) */
-  LibXR::CycleValue<float> pit; /* 俯仰角(Pitch angle) */
-  LibXR::CycleValue<float> rol; /* 翻滚角(Roll angle) */
-} GimbalCMD;
-```
+## 使用约定
 
-### 完整控制命令数据
-```cpp
-typedef struct {
-  GimbalCMD gimbal;      /* 云台控制命令 */
-  ChassisCMD chassis;    /* 底盘控制命令 */
-  bool online;           /* 在线状态 */
-  ControlSource ctrl_source; /* 控制源 */
-} Data;
-```
+1. 推荐先初始化 CMD，再初始化依赖它的控制模块。
+2. 控制源切换尽量都走 CMD 的 `SetCtrlMode` / 事件入口。
+3. 不同来源数据结构最终都转换成 `CMD::Data` 再进入 CMD。
 
-## 主要方法
-- `RegisterController`: 注册控制器，接收来自指定源的数据
-- `RegisterEvent`: 注册事件回调
-- `SetCtrlSource`: 设置当前控制源
-- `GetCtrlSource`: 获取当前控制源
-- `GetCtrlMode`: 获取当前控制模式
-- `Online`: 获取在线状态
+## 模块信息
 
-
-## 数据流向
-1. 控制设备(如DR16遥控器)将原始数据转换为CMD::Data格式
-2. 通过RegisterController注册的回调，数据存入cmd->data_数组
-3. 根据控制模式和控制源，将数据转发到相应的执行单元
-4. 云台和底盘控制数据分别通过gimbal_data_tp_和chassis_data_tp_发布
-
-## 依赖模块
-DR16
-
-## 硬件依赖
-无（本模块仅处理逻辑，不直接操作硬件）
+1. 代码入口：`Modules/CMD/CMD.hpp`
+2. Required Hardware：None
+3. Constructor Arguments：
+   - `mode`
+   - `chassis_cmd_topic_name`
+   - `gimbal_cmd_topic_name`
+   - `launcher_cmd_topic_name`
+4. Template Arguments：None
+5. Depends：None
