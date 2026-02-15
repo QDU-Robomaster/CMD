@@ -91,7 +91,7 @@ class CMD : public LibXR::Application {
    */
   enum {
     CMD_EVENT_START_CTRL = 0x13212508, /* 开始控制事件ID */
-    CMD_EVENT_LOST_CTRL = 0x13212509 /* 丢失控制事件ID */
+    CMD_EVENT_LOST_CTRL = 0x13212509   /* 丢失控制事件ID */
   };
 
   /**
@@ -146,9 +146,12 @@ class CMD : public LibXR::Application {
       const char* chassis_cmd_topic_name, const char* gimbal_cmd_topic_name,
       const char* launcher_cmd_topic_name)
       : mode_(mode),
-        chassis_data_tp_(chassis_cmd_topic_name, sizeof(ChassisCMD), nullptr, true),
-        gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD), nullptr, true),
-        fire_data_tp_(launcher_cmd_topic_name, sizeof(LauncherCMD), nullptr, true) {
+        chassis_data_tp_(chassis_cmd_topic_name, sizeof(ChassisCMD), nullptr,
+                         true),
+        gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD), nullptr,
+                        true),
+        fire_data_tp_(launcher_cmd_topic_name, sizeof(LauncherCMD), nullptr,
+                      true) {
     UNUSED(hw);
     UNUSED(app);
     // 创建事件回调函数，用于处理控制模式切换事件
@@ -168,9 +171,7 @@ class CMD : public LibXR::Application {
    * @param mode 要设置的控制模式
    * @details 根据不同的控制模式配置相应的数据处理回调函数
    */
-  void SetCtrlMode(Mode mode) {
-    this->mode_ = mode;
-  }
+  void SetCtrlMode(Mode mode) { this->mode_ = mode; }
 
   /**
    * @brief 事件处理器
