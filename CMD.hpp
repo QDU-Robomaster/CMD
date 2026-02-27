@@ -53,9 +53,10 @@ class CMD : public LibXR::Application {
    * @brief 底盘控制命令结构体
    */
   typedef struct {
-    float x; /* X轴方向控制量 */
-    float y; /* Y轴方向控制量 */
-    float z; /* Z轴方向控制量（旋转） */
+    float x;     /* X轴方向控制量 */
+    float y;     /* Y轴方向控制量 */
+    float z;     /* Z轴方向控制量（旋转） */
+    bool boost;  /* 功率加成模式（Shift按下时启用） */
   } ChassisCMD;
 
   /**
