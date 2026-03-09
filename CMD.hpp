@@ -17,6 +17,7 @@ constructor_args:
  * @details 负责处理来自不同控制源的命令，并将其转发到相应的执行单元
  */
 
+#include <array>
 #include <vector>
 
 #include "app_framework.hpp"
@@ -112,6 +113,10 @@ class CMD : public LibXR::Application {
    * @details 用于其他模块绑定事件或激活事件
    */
   LibXR::Event& GetEvent() { return cmd_event_; }
+
+  LibXR::Topic GetGimbalTopic() { return LibXR::Topic(gimbal_data_tp_); }
+  LibXR::Topic GetChassisTopic() { return LibXR::Topic(chassis_data_tp_); }
+  LibXR::Topic GetLauncherTopic() { return LibXR::Topic(fire_data_tp_); }
 
   /**
    * @brief 获取在线状态
