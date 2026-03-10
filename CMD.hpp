@@ -114,10 +114,6 @@ class CMD : public LibXR::Application {
    */
   LibXR::Event& GetEvent() { return cmd_event_; }
 
-  LibXR::Topic GetGimbalTopic() { return LibXR::Topic(gimbal_data_tp_); }
-  LibXR::Topic GetChassisTopic() { return LibXR::Topic(chassis_data_tp_); }
-  LibXR::Topic GetLauncherTopic() { return LibXR::Topic(fire_data_tp_); }
-
   /**
    * @brief 获取在线状态
    * @return 是否在线
