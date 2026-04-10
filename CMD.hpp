@@ -17,7 +17,6 @@ constructor_args:
  * @details 负责处理来自不同控制源的命令，并将其转发到相应的执行单元
  */
 
-#include <array>
 #include <vector>
 
 #include "app_framework.hpp"
@@ -51,22 +50,37 @@ class CMD : public LibXR::Application {
   };
 
   /**
+   * @brief 底盘小模式枚举
+   */
+  enum class ChasStat : int8_t {
+    NONE = 0,    /*无模式*/
+    BOOST = 1,   /*加速*/
+    STRETCH = 2, /*伸腿*/
+  };
+
+  /**
    * @brief 底盘控制命令结构体
    */
   typedef struct {
-    float x;    /* X轴方向控制量 */
-    float y;    /* Y轴方向控制量 */
-    float z;    /* Z轴方向控制量（旋转） */
-    bool boost; /* 功率加成模式（Shift按下时启用） */
+    float x;              /* X轴方向控制量 */
+    float y;              /* Y轴方向控制量 */
+    float z;              /* Z轴方向控制量（旋转） */
+    ChasStat self_define; /* 自定义按钮 */
   } ChassisCMD;
 
   /**
    * @brief 云台控制命令结构体
    */
   typedef struct {
-    float yaw; /* 偏航角（Yaw angle） */
-    float pit; /* 俯仰角（Pitch angle） */
-    float rol; /* 翻滚角（Roll angle） */
+    float yaw;      /* 偏航角（Yaw angle） */
+    float pit;      /* 俯仰角（Pitch angle） */
+    float rol;      /* 翻滚角（Roll angle） */
+    float yaw_dot;  /* yaw角速度 */
+    float yaw_ddot; /* yaw角加速度 */
+    float pit_dot;  /* pit角速度 */
+    float pit_ddot; /* pit角加速度 */
+    float rol_dot;  /* roll角速度 */
+    float rol_ddot; /* roll角加速度 */
   } GimbalCMD;
 
   /**
