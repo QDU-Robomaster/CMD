@@ -17,10 +17,10 @@ constructor_args:
  * @details 负责处理来自不同控制源的命令，并将其转发到相应的执行单元
  */
 
-#include <vector>
+#include <array>
+#include <cmath>
 
 #include "app_framework.hpp"
-#include "cycle_value.hpp"
 #include "event.hpp"
 #include "libxr_def.hpp"
 #include "message.hpp"
@@ -39,6 +39,15 @@ class CMD : public LibXR::Application {
     CTRL_SOURCE_RC, /* 遥控器控制源 */
     CTRL_SOURCE_AI, /* AI控制源 */
     CTRL_SOURCE_NUM /* 控制源数量 */
+  };
+
+  /**
+   * @brief 遥控链路输入源枚举
+   */
+  enum class RCInputSource : uint8_t {
+    RC_INPUT_DR16,
+    RC_INPUT_VT13,
+    RC_INPUT_NUM
   };
 
   /**
@@ -136,18 +145,37 @@ class CMD : public LibXR::Application {
 
   /**
    * @brief 直接写入遥控器控制数据
+   * @details 兼容接口，默认按DR16输入源写入
    */
   void FeedRC(const Data& rc_data) {
-    data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)] = rc_data;
-    ProcessAndPublish();
+    this->FeedRC(RCInputSource::RC_INPUT_DR16, rc_data);
+  }
+
+  /**
+   * @brief 按遥控输入源写入控制数据
+   */
+  void FeedRC(RCInputSource source, const Data& rc_data) {
+    const auto source_index = static_cast<size_t>(source);
+    if (source_index >= static_cast<size_t>(RCInputSource::RC_INPUT_NUM)) {
+      return;
+    }
+
+    this->rc_input_data_[source_index] = rc_data;
+    this->rc_input_seq_[source_index] = ++this->rc_update_seq_;
+
+    if (rc_data.chassis_online && this->IsRCInputActive(rc_data)) {
+      this->active_rc_input_ = source;
+    }
+
+    this->ProcessAndPublish();
   }
 
   /**
    * @brief 直接写入 AI 控制数据
    */
   void FeedAI(const Data& ai_data) {
-    data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)] = ai_data;
-    ProcessAndPublish();
+    this->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)] = ai_data;
+    this->ProcessAndPublish();
   }
 
   /**
@@ -170,16 +198,18 @@ class CMD : public LibXR::Application {
                       true) {
     UNUSED(hw);
     UNUSED(app);
-    // 创建事件回调函数，用于处理控制模式切换事件
+    /* 创建事件回调函数 */
     auto callback = LibXR::Callback<uint32_t>::Create(
         [](bool in_isr, CMD* cmd, uint32_t event_id) {
           UNUSED(in_isr);
           cmd->EventHandler(event_id);
         },
         this);
-    // 注册控制模式事件处理回调
-    cmd_event_.Register(static_cast<uint32_t>(Mode::CMD_OP_CTRL), callback);
-    cmd_event_.Register(static_cast<uint32_t>(Mode::CMD_AUTO_CTRL), callback);
+    /* 注册控制模式事件处理回调 */
+    this->cmd_event_.Register(static_cast<uint32_t>(Mode::CMD_OP_CTRL),
+                              callback);
+    this->cmd_event_.Register(static_cast<uint32_t>(Mode::CMD_AUTO_CTRL),
+                              callback);
   }
 
   /**
@@ -195,7 +225,7 @@ class CMD : public LibXR::Application {
    * @details 处理来自事件系统的控制模式切换请求
    */
   void EventHandler(uint32_t event_id) {
-    SetCtrlMode(static_cast<Mode>(event_id));
+    this->SetCtrlMode(static_cast<Mode>(event_id));
   }
 
   /**
@@ -219,33 +249,102 @@ class CMD : public LibXR::Application {
   Mode mode_;              /* 当前控制模式 */
   LibXR::Event cmd_event_; /* 事件处理器 */
   std::array<Data, static_cast<size_t>(ControlSource::CTRL_SOURCE_NUM)>
-      data_{};                      /* 各控制源的数据 */
+      data_{}; /* 各控制源的数据 */
+  std::array<Data, static_cast<size_t>(RCInputSource::RC_INPUT_NUM)>
+      rc_input_data_{}; /* 各遥控输入源的数据 */
+  std::array<uint32_t, static_cast<size_t>(RCInputSource::RC_INPUT_NUM)>
+      rc_input_seq_{};              /* 各遥控输入源的数据序号 */
   LibXR::Topic chassis_data_tp_;    /* 底盘命令主题 */
   LibXR::Topic gimbal_data_tp_;     /* 云台命令主题 */
   LibXR::Topic fire_data_tp_;       /* 开火命令主题 */
   LibXR::Topic host_euler_data_tp_; /* 上位机欧拉角主题 */
+  RCInputSource active_rc_input_ =
+      RCInputSource::RC_INPUT_DR16; /* 当前活动遥控输入源 */
+  uint32_t rc_update_seq_ = 0;      /* 遥控输入数据更新序号 */
 
   /*--------------------------工具函数-------------------------------------------------*/
-  void ProcessAndPublish() {
-    const Data& rc_data =
-        data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)];
-    const Data& ai_data =
-        data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)];
+  static bool IsRCInputOnline(const Data& rc_data) {
+    return rc_data.chassis_online;
+  }
 
-    if (!rc_data.chassis_online && online_) {
-      cmd_event_.Active(CMD_EVENT_LOST_CTRL);
-      online_ = false;
-    } else if (rc_data.chassis_online && !online_) {
-      cmd_event_.Active(CMD_EVENT_START_CTRL);
-      online_ = true;
+  static bool IsRCInputActive(const Data& rc_data) {
+    constexpr float RC_ACTIVITY_EPS = 0.05f;
+
+    return std::fabs(rc_data.chassis.x) > RC_ACTIVITY_EPS ||
+           std::fabs(rc_data.chassis.y) > RC_ACTIVITY_EPS ||
+           std::fabs(rc_data.chassis.z) > RC_ACTIVITY_EPS ||
+           std::fabs(rc_data.gimbal.yaw) > RC_ACTIVITY_EPS ||
+           std::fabs(rc_data.gimbal.pit) > RC_ACTIVITY_EPS ||
+           std::fabs(rc_data.gimbal.rol) > RC_ACTIVITY_EPS ||
+           (rc_data.chassis.self_define != ChasStat::NONE) ||
+           rc_data.launcher.isfire;
+  }
+
+  static Data MakeOfflineRCData() {
+    Data rc_data{};
+    rc_data.chassis_online = false;
+    rc_data.gimbal_online = false;
+    rc_data.ctrl_source = ControlSource::CTRL_SOURCE_RC;
+    return rc_data;
+  }
+
+  Data SelectRCData() {
+    const auto dr16_index = static_cast<size_t>(RCInputSource::RC_INPUT_DR16);
+    const auto vt13_index = static_cast<size_t>(RCInputSource::RC_INPUT_VT13);
+    const auto active_index = static_cast<size_t>(this->active_rc_input_);
+
+    /* 当前活动源在线则持续使用 */
+    if (active_index < static_cast<size_t>(RCInputSource::RC_INPUT_NUM) &&
+        this->IsRCInputOnline(this->rc_input_data_[active_index])) {
+      return this->rc_input_data_[active_index];
     }
 
-    if (mode_ == Mode::CMD_OP_CTRL) {
+    /* 活动源离线后切换 */
+    if (this->active_rc_input_ == RCInputSource::RC_INPUT_DR16) {
+      if (this->IsRCInputOnline(this->rc_input_data_[vt13_index])) {
+        this->active_rc_input_ = RCInputSource::RC_INPUT_VT13;
+        return this->rc_input_data_[vt13_index];
+      }
+      if (this->IsRCInputOnline(this->rc_input_data_[dr16_index])) {
+        this->active_rc_input_ = RCInputSource::RC_INPUT_DR16;
+        return this->rc_input_data_[dr16_index];
+      }
+    } else {
+      if (this->IsRCInputOnline(this->rc_input_data_[dr16_index])) {
+        this->active_rc_input_ = RCInputSource::RC_INPUT_DR16;
+        return this->rc_input_data_[dr16_index];
+      }
+      if (this->IsRCInputOnline(this->rc_input_data_[vt13_index])) {
+        this->active_rc_input_ = RCInputSource::RC_INPUT_VT13;
+        return this->rc_input_data_[vt13_index];
+      }
+    }
+
+    return MakeOfflineRCData();
+  }
+
+  void ProcessAndPublish() {
+    const Data rc_data = this->SelectRCData();
+    const Data& ai_data =
+        this->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_AI)];
+
+    this->data_[static_cast<size_t>(ControlSource::CTRL_SOURCE_RC)] = rc_data;
+
+    if (!rc_data.chassis_online && this->online_) {
+      this->cmd_event_.Active(CMD_EVENT_LOST_CTRL);
+      this->online_ = false;
+    } else if (rc_data.chassis_online && !this->online_) {
+      this->cmd_event_.Active(CMD_EVENT_START_CTRL);
+      this->online_ = true;
+    }
+
+    if (this->mode_ == Mode::CMD_OP_CTRL) {
       Data out = rc_data;
-      gimbal_data_tp_.Publish(out.gimbal);
-      chassis_data_tp_.Publish(out.chassis);
-      fire_data_tp_.Publish(out.launcher);
-    } else {  // CMD_AUTO_CTRL
+      this->gimbal_data_tp_.Publish(out.gimbal);
+      this->chassis_data_tp_.Publish(out.chassis);
+      this->fire_data_tp_.Publish(out.launcher);
+    } else {
+      /* CMD_AUTO_CTRL */
       ChassisCMD out_chassis =
           ai_data.chassis_online ? ai_data.chassis : rc_data.chassis;
       GimbalCMD out_gimbal =
@@ -257,9 +356,9 @@ class CMD : public LibXR::Application {
       ChassisCMD chassis = out_chassis;
       GimbalCMD gimbal = out_gimbal;
       LauncherCMD launcher = out_launcher;
-      gimbal_data_tp_.Publish(gimbal);
-      chassis_data_tp_.Publish(chassis);
-      fire_data_tp_.Publish(launcher);
+      this->gimbal_data_tp_.Publish(gimbal);
+      this->chassis_data_tp_.Publish(chassis);
+      this->fire_data_tp_.Publish(launcher);
     }
   }
 };
