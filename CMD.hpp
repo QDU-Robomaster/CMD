@@ -190,12 +190,12 @@ class CMD : public LibXR::Application {
       const char* chassis_cmd_topic_name, const char* gimbal_cmd_topic_name,
       const char* launcher_cmd_topic_name)
       : mode_(mode),
-        chassis_data_tp_(chassis_cmd_topic_name, sizeof(ChassisCMD), nullptr,
-                         true),
-        gimbal_data_tp_(gimbal_cmd_topic_name, sizeof(GimbalCMD), nullptr,
-                        true),
-        fire_data_tp_(launcher_cmd_topic_name, sizeof(LauncherCMD), nullptr,
-                      true) {
+        chassis_data_tp_(LibXR::Topic::CreateTopic<ChassisCMD>(
+            chassis_cmd_topic_name, nullptr, true)),
+        gimbal_data_tp_(LibXR::Topic::CreateTopic<GimbalCMD>(
+            gimbal_cmd_topic_name, nullptr, true)),
+        fire_data_tp_(LibXR::Topic::CreateTopic<LauncherCMD>(
+            launcher_cmd_topic_name, nullptr, true)) {
     UNUSED(hw);
     UNUSED(app);
     /* 创建事件回调函数 */
