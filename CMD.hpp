@@ -194,8 +194,11 @@ class CMD
    * @param chassis_cmd_topic_name 底盘命令主题名称
    * @param gimbal_cmd_topic_name 云台命令主题名称
    */
-  CMD(Mode mode, const char* chassis_cmd_topic_name, const char* gimbal_cmd_topic_name,
-      const char* launcher_cmd_topic_name)
+  CMD(
+      Mode mode = CMD::Mode::CMD_OP_CTRL,
+      const char* chassis_cmd_topic_name = "chassis_cmd",
+      const char* gimbal_cmd_topic_name = "gimbal_cmd",
+      const char* launcher_cmd_topic_name = "launcher_cmd")
       : mode_(mode),
         chassis_data_tp_(
             LibXR::Topic::CreateTopic<ChassisCMD>(chassis_cmd_topic_name, nullptr, true)),
