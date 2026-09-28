@@ -246,11 +246,6 @@ class CMD
     UNUSED(source);
   }
 
-  /**
-   * @brief 监控函数重写
-   */
-  void OnMonitor() {}
-
  private:
   bool online_ = false;    /* 在线状态 */
   Mode mode_;              /* 当前控制模式 */
