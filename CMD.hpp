@@ -2,16 +2,10 @@
 
 /* clang-format off */
 /* === MODULE MANIFEST V2 ===
-module_description: 控制命令模块
+module_description: 控制命令中枢：汇总遥控器与上位机输入，发布底盘、云台、发射命令 / Control command hub that merges remote-controller and host inputs and publishes chassis, gimbal and launcher commands
 depends: []
 === END MANIFEST === */
 /* clang-format on */
-
-/**
- * @file CMD.hpp
- * @brief 控制命令处理模块
- * @details 负责处理来自不同控制源的命令，并将其转发到相应的执行单元
- */
 
 #include <array>
 #include <cmath>
@@ -150,7 +144,6 @@ class CMD
 
   /**
    * @brief 直接写入遥控器控制数据
-   * @details 兼容接口，默认按DR16输入源写入
    */
   void FeedRC(const Data& rc_data)
   {
@@ -223,7 +216,6 @@ class CMD
   /**
    * @brief 设置控制模式
    * @param mode 要设置的控制模式
-   * @details 根据不同的控制模式配置相应的数据处理回调函数
    */
   void SetCtrlMode(Mode mode) { this->mode_ = mode; }
 
@@ -238,7 +230,6 @@ class CMD
    * @brief 注册控制器
    * @tparam SourceDataType 源数据类型
    * @param source 源主题
-   * @details 将外部控制源的数据接入CMD系统，并进行预处理和分发
    */
   template <typename SourceDataType>
   void RegisterController(LibXR::Topic& source)
@@ -263,7 +254,6 @@ class CMD
   RCInputSource active_rc_input_ = RCInputSource::RC_INPUT_DR16; /* 当前活动遥控输入源 */
   uint32_t rc_update_seq_ = 0; /* 遥控输入数据更新序号 */
 
-  /*--------------------------工具函数-------------------------------------------------*/
   static bool IsRCInputOnline(const Data& rc_data) { return rc_data.chassis_online; }
 
   static bool IsRCInputActive(const Data& rc_data)
