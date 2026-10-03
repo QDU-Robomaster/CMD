@@ -6,13 +6,13 @@
 
 CMD 把遥控器（DR16、VT13）与上位机等来源的输入整理为三路命令 Topic：底盘命令、云台命令、发射命令。下游 Module 订阅这三个 Topic，输入来源由 CMD 内部选择。
 
-输入由其他 Module 调用 `FeedRC(...)` 或 `FeedAI(...)` 写入 `CMD::Data`，每次写入立即执行一轮处理并发布三路命令。CMD 自身不创建线程，由输入 Module 的调用驱动发布。
+输入由其他 Module 调用 `FeedRC(...)` 或 `FeedAI(...)` 写入 `CMD::Data`，每次写入立即执行一轮处理并发布三路命令。处理、命令 Topic 的发布以及遥控器上线与离线事件的激活都在调用者的上下文中同步完成，Topic 与事件上注册的回调函数在同一上下文中运行。控制模式事件的回调 `EventHandler` 在激活该事件的上下文中运行，`SetCtrlMode(...)`、`GetCtrlMode()`、`Online()`、`GetAIGimbalStatus()` 在调用者的上下文中直接读写 CMD 的成员。
 
 遥控器在线状态变化时，CMD 在自己的事件上激活 `CMD_EVENT_START_CTRL`（`0x13212508`，遥控器上线）或 `CMD_EVENT_LOST_CTRL`（`0x13212509`，遥控器离线）。
 
 CMD merges the input of the remote controllers (DR16, VT13) and of the host into three command Topics: the chassis command, the gimbal command and the launcher command. Downstream Modules subscribe to these Topics, and CMD selects the input source internally.
 
-Other Modules write a `CMD::Data` through `FeedRC(...)` or `FeedAI(...)`; every write runs one processing pass and publishes the three commands immediately. CMD creates no thread of its own, and the publishing is driven by the calls of the input Modules.
+Other Modules write a `CMD::Data` through `FeedRC(...)` or `FeedAI(...)`; every write runs one processing pass and publishes the three commands immediately. The processing, the publishing of the command Topics and the activation of the remote-controller online and offline events all complete synchronously in the context of the caller, and the callbacks registered on those Topics and events run in that same context. The callback `EventHandler` of the control mode events runs in the context that activates the event, and `SetCtrlMode(...)`, `GetCtrlMode()`, `Online()` and `GetAIGimbalStatus()` read and write the members of CMD directly in the context of the caller.
 
 When the remote-controller online state changes, CMD activates `CMD_EVENT_START_CTRL` (`0x13212508`, remote controller online) or `CMD_EVENT_LOST_CTRL` (`0x13212509`, remote controller offline) on its own event.
 
