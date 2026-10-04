@@ -4,9 +4,9 @@
 
 ## 1. 模块作用 / Purpose
 
-CMD 把遥控器（DR16、VT13）与上位机等来源的输入整理为三路命令 Topic：底盘命令、云台命令、发射命令。下游 Module 订阅这三个 Topic，输入来源由 CMD 内部选择。
+CMD 把遥控器（DR16、VT13）与上位机等来源的输入整理为三路命令 Topic：底盘命令、云台命令、发射命令。下游模块订阅这三个 Topic，输入来源由 CMD 内部选择。
 
-输入由其他 Module 调用 `FeedRC(...)` 或 `FeedAI(...)` 写入 `CMD::Data`，每次写入立即执行一轮处理并发布三路命令。处理、命令 Topic 的发布以及遥控器上线与离线事件的激活都在调用者的上下文中同步完成，Topic 与事件上注册的回调函数在同一上下文中运行。控制模式事件的回调 `EventHandler` 在激活该事件的上下文中运行，`SetCtrlMode(...)`、`GetCtrlMode()`、`Online()`、`GetAIGimbalStatus()` 在调用者的上下文中直接读写 CMD 的成员。
+输入由其他模块调用 `FeedRC(...)` 或 `FeedAI(...)` 写入 `CMD::Data`，每次写入立即执行一轮处理并发布三路命令。处理、命令 Topic 的发布以及遥控器上线与离线事件的激活都在调用者的上下文中同步完成，Topic 与事件上注册的回调函数在同一上下文中运行。控制模式事件的回调 `EventHandler` 在激活该事件的上下文中运行，`SetCtrlMode(...)`、`GetCtrlMode()`、`Online()`、`GetAIGimbalStatus()` 在调用者的上下文中直接读写 CMD 的成员。
 
 遥控器在线状态变化时，CMD 在自己的事件上激活 `CMD_EVENT_START_CTRL`（`0x13212508`，遥控器上线）或 `CMD_EVENT_LOST_CTRL`（`0x13212509`，遥控器离线）。
 
@@ -30,7 +30,7 @@ When the remote-controller online state changes, CMD activates `CMD_EVENT_START_
 - `FeedRC(const Data&)`、`FeedRC(RCInputSource, const Data&)`：写入遥控数据。
 - `FeedAI(const Data&)`：写入上位机或自动控制数据。
 - `SetCtrlMode(Mode)`、`GetCtrlMode()`：设置、读取控制模式。
-- `GetEvent()`：返回 CMD 的 `LibXR::Event`。在其上激活事件 ID `static_cast<uint32_t>(CMD::Mode::CMD_OP_CTRL)` 或 `static_cast<uint32_t>(CMD::Mode::CMD_AUTO_CTRL)` 即切换到对应的控制模式，`EventBinder` 等 Module 通过它绑定事件。
+- `GetEvent()`：返回 CMD 的 `LibXR::Event`。在其上激活事件 ID `static_cast<uint32_t>(CMD::Mode::CMD_OP_CTRL)` 或 `static_cast<uint32_t>(CMD::Mode::CMD_AUTO_CTRL)` 即切换到对应的控制模式，`EventBinder` 等模块通过它绑定事件。
 - `Online()`：遥控器是否在线。
 - `GetAIGimbalStatus()`：AI 数据的 `gimbal_online`。
 
@@ -112,7 +112,7 @@ modules:
       - launcher_cmd_topic_name: "launcher_cmd"
 ```
 
-DR16、VT13、Gimbal 等 Module 以 `CMD&` 参数引用 CMD，配置中填写 CMD 的实例 id（上例为 `cmd`），CMD 实例列在它们之前。
+DR16、VT13、Gimbal 等模块以 `CMD&` 参数引用 CMD，配置中填写 CMD 的实例 id（上例为 `cmd`），CMD 实例列在它们之前。
 
 Modules such as DR16, VT13 and Gimbal take CMD as a `CMD&` parameter; the configuration holds the instance id of CMD (`cmd` above), and the CMD instance is listed before them.
 
@@ -120,7 +120,7 @@ Modules such as DR16, VT13 and Gimbal take CMD as a `CMD&` parameter; the config
 
 依赖：LibXR。
 
-硬件：无。输入数据由 DR16、VT13 等 Module 写入。
+硬件：无。输入数据由 DR16、VT13 等模块写入。
 
 Dependencies: LibXR.
 
