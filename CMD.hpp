@@ -401,6 +401,16 @@ class CMD
     if (this->mode_ == Mode::CMD_OP_CTRL)
     {
       Data out = rc_data;
+      // 上位机在线时优先使用上位机目标（云台 / 底盘），离线自动回落到遥控器。
+      // Prefer the host target for gimbal and chassis while it is online; fall back to the
+      // remote controller when it is not. Fire stays on the remote controller in this mode.
+      // TEST ONLY (2026-10-26): in operator mode the gimbal follows the remote controller
+      // only. The host target is an absolute angle while the gimbal integrates operator
+      // commands as rates, so forwarding it here drove the gimbal away.
+      if (ai_data.chassis_online)
+      {
+        out.chassis = ai_data.chassis;
+      }
       this->gimbal_data_tp_.Publish(out.gimbal);
       this->chassis_data_tp_.Publish(out.chassis);
       this->fire_data_tp_.Publish(out.launcher);
